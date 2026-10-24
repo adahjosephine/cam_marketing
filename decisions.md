@@ -84,3 +84,77 @@ catalog that does not exist yet.
 **Alternatives considered:** Only describing the setup in the README.
 Rejected because a description can drift from what was actually run;
 the SQL file *is* what was run.
+
+## 23 Oct 2026 — Treat null impressions and clicks as zero
+
+**Decision:** In the staging models, null impressions and clicks are
+replaced with 0, for both Facebook and Snapchat. Spend has no nulls.
+
+**Why:**
+- Null is common: 1.6% of Facebook rows have null impressions, 26.4% have
+  null clicks, and 4.0% of Snapchat rows have null clicks.
+- The evidence suggests null usually means "no activity": Facebook almost
+  never writes an explicit 0 for clicks (42 rows), and null-click rows are
+  mostly tiny ads (median 24 impressions vs 2,661 for other rows).
+  Null-impression rows also have zero spend and no clicks.
+- Totals are not affected either way, because SQL's SUM() ignores nulls.
+  Using 0 makes the meaning explicit and avoids surprises in row-level
+  calculations.
+
+**Known risk:** 291 Facebook null-click rows have 1,000+ impressions, so
+for a few rows "null = 0" is an assumption rather than a fact.
+
+**Related:** Metrics that divide (CTR = clicks ÷ impressions,
+CPC = cost per click = spend ÷ clicks, CPM = cost per 1,000 impressions)
+return NULL when the denominator is 0, rather than failing or showing 0.
+
+**Alternatives considered:**
+- Dropping rows with nulls. Rejected: it would remove 26.4% of Facebook
+  rows, and those rows still carry spend, so total spend would be understated.
+- Leaving values as null. Workable, since totals are the same, but less
+  clear for analysts working row by row.
+
+## 23 Oct 2026 — Unified model grain is ad × day, without country
+
+**Decision:** The unified model has one row per ad per day (Option B).
+Snapchat rows, which are per ad per day per country, are summed across
+countries. No country column is created for Facebook.
+
+**Why:**
+- Consistency: both platforms share the same grain, so they can be
+  combined and compared without empty columns.
+- The brief's business questions do not ask about country.
+- Facebook has no measured country. Campaign names contain country-like
+  codes (e.g. `ita_`, `bra_`), but these are labels typed by a person
+  describing the intended market, not where the ad was shown. Some are not
+  countries at all (`all-eu`, `global`, `NORDICS`, `LATAM`).
+- Snapchat proves the gap: its campaign names say ITA, FRA, TUR and others,
+  but its measured `ad_country` only shows DE, CH, AT and one US row.
+  Putting a name-derived country and a measured country in one column
+  would let analysts compare two different things as if they were the same.
+
+**What is kept:** Snapchat's country detail stays in the raw table and its
+staging model, so a country-level model can be added later if needed.
+
+**Alternatives considered:**
+- Grain of ad × day × country, with country left NULL for Facebook.
+  Rejected because half the table would have an empty column, and a
+  Facebook-vs-Snapchat comparison by country would be misleading.
+- Parsing country from Facebook campaign names. Rejected as unreliable.
+
+## 24 Oct 2026 — How the raw data was loaded
+
+**Decision:** Facebook files were loaded with SQL (`read_files`, every
+column as STRING). Snapchat files were loaded through the Databricks upload
+screen with default settings, so Databricks chose their column types.
+Both methods are recorded in `setup/03_load_raw_data.sql`.
+
+**Why:** The SQL method keeps every value exactly as received, but it
+needs more steps. For the small Snapchat files, the upload screen was
+simpler, and its guessed types lose no information (BIGINT holds the IDs
+exactly). In both cases the dbt staging models convert every column to
+its final type, so the end result is the same.
+
+**Trade-off:** The raw layer uses two loading methods, and the Snapchat
+types depend on Databricks' guesses. For a recurring pipeline, I would
+use one scripted method for all sources.
