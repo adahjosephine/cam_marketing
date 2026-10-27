@@ -1,0 +1,46 @@
+# CI: runs on every pull request into main.
+# Builds and tests the whole project in a throwaway schema inside cam_ci,
+# so a broken model or failing test is caught BEFORE it reaches main.
+name: dbt CI
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  dbt-ci:
+    runs-on: ubuntu-latest
+
+    env:
+      DBT_TARGET: ci
+      DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+      DATABRICKS_HTTP_PATH: ${{ secrets.DATABRICKS_HTTP_PATH }}
+      DATABRICKS_PAT_TOKEN: ${{ secrets.DATABRICKS_CI_TOKEN }}
+      # one schema per pull request, e.g. dbt_ci_pr_7
+      CI_SCHEMA: dbt_ci_pr_${{ github.event.pull_request.number }}
+
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Install Python packages from uv.lock
+        run: uv sync --locked
+
+      - name: Install dbt packages
+        working-directory: cam_marketing
+        run: uv run dbt deps
+
+      - name: Check the connection
+        working-directory: cam_marketing
+        run: uv run dbt debug
+
+      - name: Build and test everything (seeds, models, tests)
+        working-directory: cam_marketing
+        run: uv run dbt build
+
+      - name: Generate documentation
+        working-directory: cam_marketing
+        run: uv run dbt docs generate

@@ -1,0 +1,20 @@
+version: 2
+
+sources:
+  - name: facebook
+    description: >
+      Raw Facebook Ads data, loaded unchanged from the provided CSV files.
+      All columns are stored as text; types are converted in staging.
+    database: cam_raw_bronze
+    schema: facebook
+    tables:
+      - name: ads_stats
+        description: Daily spend, impressions and clicks. One row per ad per day.
+      - name: ads
+        description: One row per ad, with its ad group, campaign and account.
+      - name: ad_groups
+        description: One row per ad group, with its name.
+      - name: campaigns
+        description: One row per campaign, with its name.
+      - name: accounts
+        description: One row per ad account, with its name and currency.

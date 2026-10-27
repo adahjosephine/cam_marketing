@@ -1,16 +1,9 @@
-
-# Name your project! Project names should contain only lowercase characters
-# and underscores. A good package name should reflect your organization's
-# name or the intended use of these models
 name: 'cam_marketing'
 version: '1.0.0'
 
-# This setting configures which "profile" dbt uses for this project.
+# Which connection profile (in profiles.yml) this project uses.
 profile: 'cam_marketing'
 
-# These configurations specify where dbt should look for different types of files.
-# The `model-paths` config, for example, states that models in this project can be
-# found in the "models/" directory. You probably won't need to change these!
 model-paths: ["models"]
 analysis-paths: ["analyses"]
 test-paths: ["tests"]
@@ -18,19 +11,33 @@ seed-paths: ["seeds"]
 macro-paths: ["macros"]
 snapshot-paths: ["snapshots"]
 
-clean-targets:         # directories to be removed by `dbt clean`
+clean-targets:
   - "target"
   - "dbt_packages"
 
-
-# Configuring models
-# Full documentation: https://docs.getdbt.com/docs/configuring-models
-
-# In this example config, we tell dbt to build all models in the example/
-# directory as views. These settings can be overridden in the individual model
-# files using the `{{ config(...) }}` macro.
+# Settings with a + apply to every model in that folder and its sub-folders.
+# Schema names: in dev and CI, dbt adds the layer to your base schema
+# (e.g. dbt_josephine_staging). In prod, the layer name is used on its own
+# (e.g. staging). See macros/generate_schema_name.sql.
 models:
   cam_marketing:
-    # Config indicated by + and applies to all files under models/example/
-    example:
-      +materialized: view
+    staging:
+      +materialized: view        # light clean-up, always fresh, no storage
+      +schema: staging
+    intermediate:
+      +materialized: view        # joins only; read by marts
+      +schema: intermediate
+    marts:
+      +materialized: table       # final tables analysts query, so stored for speed
+      +schema: marts
+      +persist_docs:             # copy descriptions into Unity Catalog
+        relation: true
+        columns: true
+
+  # Elementary (data quality monitoring) stores its results in its own schema.
+  elementary:
+    +schema: elementary
+
+seeds:
+  cam_marketing:
+    +schema: reference

@@ -1,0 +1,86 @@
+version: 2
+
+models:
+  - name: stg_snapchat_ads_stats
+    description: >
+      Snapchat daily performance, typed and cleaned. One row per ad per day
+      per country.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [ad_id, ad_date, country_code]
+    columns:
+      - name: ad_id
+        description: Snapchat ad ID (renamed from ad_detail_id).
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_snapchat_ads')
+                field: ad_id
+      - name: country_code
+        description: Country where the ad was shown, upper case.
+        data_tests: [not_null]
+      - name: currency_code
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['EUR']
+      - name: ad_date
+        data_tests: [not_null]
+      - name: ad_spend
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+      - name: ad_impressions
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+      - name: ad_clicks
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+
+  - name: stg_snapchat_ads
+    description: One row per Snapchat ad, linking it to its ad group.
+    columns:
+      - name: ad_id
+        data_tests: [unique, not_null]
+      - name: ad_group_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_snapchat_ad_groups')
+                field: ad_group_id
+              config:
+                severity: warn   # known source gap: 304 ads (85 ad groups) have no
+                                 # ad group record. None have stats, so no spend is affected.
+
+  - name: stg_snapchat_ad_groups
+    description: >
+      One row per Snapchat ad group: the most recent version. The raw table
+      holds history rows, which are removed here.
+    columns:
+      - name: ad_group_id
+        data_tests: [unique, not_null]
+      - name: campaign_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_snapchat_campaigns')
+                field: campaign_id
+
+  - name: stg_snapchat_campaigns
+    description: One row per Snapchat campaign.
+    columns:
+      - name: campaign_id
+        data_tests: [unique, not_null]

@@ -1,0 +1,22 @@
+version: 2
+
+sources:
+  - name: snapchat
+    description: >
+      Raw Snapchat Ads data, loaded from the provided CSV files through the
+      Databricks upload screen. Types are converted in staging.
+    database: cam_raw_bronze
+    schema: snapchat
+    tables:
+      - name: ads_stats
+        description: >
+          Daily spend, impressions and clicks. One row per ad per day per
+          country. ad_detail_id is the ad's ID.
+      - name: ads
+        description: One row per ad, with its ad group.
+      - name: ad_groups
+        description: >
+          Ad groups, with their campaign. Contains history: some ad groups
+          appear more than once with different updated_at values.
+      - name: campaigns
+        description: One row per campaign, with its account.

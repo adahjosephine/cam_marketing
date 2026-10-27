@@ -1,0 +1,130 @@
+version: 2
+
+models:
+  - name: fct_ad_performance_daily
+    description: >
+      The unified marketing model: daily advertising performance for Facebook
+      and Snapchat. One row per platform per ad per day.
+
+      **Caveats for analysts**
+      - Facebook data covers 2025 and Snapchat data covers 2024. They do not
+        overlap, so differences between platforms may reflect changes over time
+        rather than platform performance. Compare rates (CTR, CPC, CPM), not
+        totals, and always state the years.
+      - Snapchat rows are summed across countries; country detail is in
+        stg_snapchat_ads_stats.
+      - Null impressions/clicks from the source are treated as 0; see the
+        is_*_reported flags.
+      - ctr, cpc_eur and cpm_eur are per row. For any total, sum spend_eur,
+        impressions and clicks first, then divide (or use
+        agg_campaign_performance_daily).
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [platform, ad_id, ad_date]
+      - elementary.volume_anomalies:
+          config:
+            severity: warn
+      - elementary.schema_changes:
+          config:
+            severity: warn
+    columns:
+      - name: ad_performance_id
+        description: Surrogate key, a hash of platform, ad_id and ad_date.
+        data_tests: [unique, not_null]
+      - name: platform
+        description: Advertising platform the row came from.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['facebook', 'snapchat']
+      - name: ad_date
+        description: Day the performance was recorded.
+        data_tests: [not_null]
+      - name: account_id
+        description: Ad account ID on the platform.
+      - name: account_name
+        description: Ad account name. NULL for Snapchat (no account table was provided).
+      - name: campaign_id
+        description: Campaign ID on the platform.
+        data_tests: [not_null]
+      - name: campaign_name
+        description: Campaign name as set up in the platform.
+      - name: ad_group_id
+        description: Ad group ID on the platform.
+      - name: ad_group_name
+        description: Ad group name as set up in the platform.
+      - name: ad_id
+        description: Ad ID on the platform, stored as text.
+        data_tests: [not_null]
+      - name: ad_name
+        description: Ad name as set up in the platform.
+      - name: currency_code
+        description: Currency of spend_local.
+        data_tests: [not_null]
+      - name: spend_local
+        description: Spend in the account's own currency.
+      - name: spend_eur
+        description: >
+          Spend in EUR, converted with the annual average ECB rate for that year
+          (see the exchange_rates seed). Use this column to add up spend across
+          accounts and platforms.
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+      - name: impressions
+        description: Times the ad was shown.
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+      - name: clicks
+        description: Clicks on the ad.
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+      - name: is_impressions_reported
+        description: False when the source sent no value and impressions were set to 0.
+      - name: is_clicks_reported
+        description: False when the source sent no value and clicks were set to 0.
+      - name: ctr
+        description: Click-through rate for this row, clicks / impressions. NULL when impressions = 0.
+      - name: cpc_eur
+        description: Cost per click in EUR for this row, spend_eur / clicks. NULL when clicks = 0.
+      - name: cpm_eur
+        description: Cost per 1,000 impressions in EUR for this row. NULL when impressions = 0.
+
+  - name: agg_campaign_performance_daily
+    description: >
+      Campaign totals per day, per platform, with CTR, CPC and CPM calculated
+      from summed totals. The easiest model for campaign-level questions.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [platform, campaign_id, ad_date]
+    columns:
+      - name: campaign_day_id
+        description: Surrogate key, a hash of platform, campaign_id and ad_date.
+        data_tests: [unique, not_null]
+      - name: platform
+        data_tests: [not_null]
+      - name: spend_eur
+        description: Total spend in EUR.
+      - name: impressions
+        description: Total impressions.
+      - name: clicks
+        description: Total clicks.
+      - name: active_ads
+        description: Number of ads with a stats row that day.
+      - name: ctr
+        description: clicks / impressions. NULL when impressions = 0.
+      - name: cpc_eur
+        description: spend_eur / clicks. NULL when clicks = 0.
+      - name: cpm_eur
+        description: spend_eur / impressions x 1,000. NULL when impressions = 0.

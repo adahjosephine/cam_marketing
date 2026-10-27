@@ -1,12 +1,44 @@
+# Connection settings. No secrets in this file: every value is read from an
+# environment variable. Locally they come from .env; in GitHub Actions they
+# come from repository secrets.
+#
+# DBT_TARGET picks the environment. It defaults to dev, so forgetting to set
+# it can never touch production.
+
 cam_marketing:
   target: "{{ env_var('DBT_TARGET', 'dev') }}"
   outputs:
+
+    # Development: your laptop, your personal access token, your own schema.
     dev:
       type: databricks
-      host: "{{ env_var('DATABRICKS_HOST') }}"
-      http_path: "{{ env_var('DEV_HTTP_PATH') }}"
-      token: "{{ env_var('DATABRICKS_PAT_TOKEN') }}"
-      catalog: "{{ env_var('DEV_CATALOG') }}"
-      schema: "{{ env_var('DEV_SCHEMA') }}"
+      host: "{{ env_var('DATABRICKS_HOST', '') }}"
+      http_path: "{{ env_var('DEV_HTTP_PATH', '') }}"
+      token: "{{ env_var('DATABRICKS_PAT_TOKEN', '') }}"
+      catalog: "{{ env_var('DEV_CATALOG', 'cam_dev') }}"
+      schema: "{{ env_var('DEV_SCHEMA', 'dbt_josephine') }}"
       threads: 4
 
+    # CI: GitHub Actions on every pull request. Builds into a throwaway
+    # schema per pull request inside the cam_ci catalog.
+    ci:
+      type: databricks
+      host: "{{ env_var('DATABRICKS_HOST', '') }}"
+      http_path: "{{ env_var('DATABRICKS_HTTP_PATH', '') }}"
+      token: "{{ env_var('DATABRICKS_PAT_TOKEN', '') }}"
+      catalog: cam_ci
+      schema: "{{ env_var('CI_SCHEMA', 'dbt_ci') }}"
+      threads: 4
+
+    # Production: GitHub Actions after a merge to main. Authenticates as a
+    # service principal (OAuth machine-to-machine), not as a person.
+    prod:
+      type: databricks
+      host: "{{ env_var('DATABRICKS_HOST', '') }}"
+      http_path: "{{ env_var('DATABRICKS_HTTP_PATH', '') }}"
+      auth_type: oauth
+      client_id: "{{ env_var('DATABRICKS_CLIENT_ID', '') }}"
+      client_secret: "{{ env_var('DATABRICKS_CLIENT_SECRET', '') }}"
+      catalog: cam_prod
+      schema: analytics
+      threads: 4
