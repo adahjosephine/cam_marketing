@@ -4,6 +4,10 @@ A production-minded data product that turns raw Facebook Ads and Snapchat Ads
 exports into one trusted, documented and tested model of advertising
 performance, ready for analysts, BI tools and AI agents.
 
+## Lineage Graph
+
+![A snapshot of the lineage graph](image.png)
+
 ## Architecture
 
 ```mermaid
@@ -264,3 +268,31 @@ uv run edr report
   combined `ad_id` column must be text anyway.
 
 See [decisions.md](decisions.md) for the reasoning behind each design choice.
+
+## Screenshots
+
+### Lineage graph (dbt docs)
+
+From the raw sources, through staging and intermediate, to the marts.
+
+![dbt lineage graph from elementary report](docs/images/lineage.jpeg)
+![dbt lineage graph](docs/images/lineage_graph.png)
+
+### Data quality monitoring (Elementary)
+
+Test results from the dbt runs, including the known warning for Snapchat ads
+whose ad groups are missing from the source export.
+
+![Elementary report](docs/images/elementary_report.jpeg)
+
+## Use of AI assistance
+
+This project was built with the help of Claude, 
+used as a tutor and pair programmer. It explained concepts, reviewed my
+reasoning, profiled the source data, helped debug errors, and drafted parts of
+the SQL models, YAML configuration, CI/CD workflows and documentation.
+
+The design decisions are my own. I made each choice in [decisions.md](decisions.md)
+(for example the ad × day grain, treating nulls as zero, excluding country,
+the raw catalog layout, and the environment design) after working through the
+reasoning and trade-offs. 
