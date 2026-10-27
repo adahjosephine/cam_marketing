@@ -158,3 +158,98 @@ its final type, so the end result is the same.
 **Trade-off:** The raw layer uses two loading methods, and the Snapchat
 types depend on Databricks' guesses. For a recurring pipeline, I would
 use one scripted method for all sources.
+## 26 Oct 2026 — Staging models: one per raw table, types fixed explicitly
+
+**Decision:** Each of the nine raw tables has one staging model that only
+renames, converts types and handles nulls. No joins.
+
+**Why:** Staging is the single place where raw text becomes typed data, so
+every later model can trust the types. IDs stay as text, spend becomes
+DECIMAL(18, 6) (Snapchat has 6 decimal places, and both platforms must share
+one type to be combined), impressions and clicks become BIGINT, dates become DATE.
+`try_cast` is used where values may not convert, so a bad value becomes NULL
+instead of failing the whole run.
+
+## 26 Oct 2026 — Keep the latest version of each Snapchat ad group
+
+**Decision:** `stg_snapchat_ad_groups` keeps one row per ad group, the one with
+the latest `ad_group_updated_at`.
+
+**Why:** 3 ad groups appear twice. Joining stats to the raw table would
+double-count their spend. The names did not change between versions, so
+nothing is lost today.
+
+**Alternatives considered:** dbt snapshots (slowly changing dimension type 2),
+which would keep every version with valid-from/to dates. Not needed for the
+brief's questions; noted as a future improvement.
+
+## 26 Oct 2026 — Convert all spend to EUR with an exchange-rate seed
+
+**Decision:** Spend is kept in its original currency (`spend_local`) and also
+converted to EUR (`spend_eur`) using annual average ECB rates stored in the
+`exchange_rates` seed.
+
+**Why:** 66,212 Facebook rows are in USD and the rest of the data is in EUR;
+adding them without conversion would mix currencies. The rate table is small
+and changes rarely, which is exactly what dbt seeds are for, and it is
+version-controlled. A not_null test on `spend_eur` fails if a currency-year
+has no rate.
+
+**Trade-off:** One annual rate is less precise than daily rates, but it is
+transparent and easy to audit.
+
+## 26 Oct 2026 — A wide fact table plus a campaign aggregate, no separate dimensions
+
+**Decision:** The marts are `fct_ad_performance_daily` (one row per platform,
+ad and day, with all names attached) and `agg_campaign_performance_daily`.
+
+**Why:** Every question in the brief can be answered from one table without
+joins, which is simplest for analysts, BI tools and AI agents. The descriptive
+attributes are only names, so separate dimension tables would add joins without
+adding information. The aggregate calculates CTR, CPC and CPM from totals,
+preventing the common mistake of averaging rates.
+
+## 26 Oct 2026 — Surrogate key includes the platform
+
+**Decision:** `ad_performance_id = md5(platform | ad_id | ad_date)`.
+
+**Why:** IDs are only guaranteed unique within one platform. Including the
+platform guarantees the key stays unique when the platforms are combined.
+
+## 26 Oct 2026 — Materializations
+
+**Decision:** Staging and intermediate are views; the fact table is incremental
+(merge, 3-day look-back per platform); the aggregate is a table.
+
+**Why:** Views are cheap and always current for light logic. The fact table is
+the one that grows every day, so incremental processing keeps runs fast. The
+look-back is per platform because the platforms cover different periods: one
+overall maximum date would stop Snapchat rows from ever being reprocessed.
+
+## 26 Oct 2026 — Three environments, production via a service principal
+
+**Decision:** dev (`cam_dev`, personal token), CI (`cam_ci`, one schema per pull
+request), prod (`cam_prod`, service principal with OAuth). `DBT_TARGET` selects
+the environment and defaults to `dev`.
+
+**Why:** Each environment is isolated in its own catalog. Production must not
+depend on a person's account, so it uses a service principal. The service
+principal can only read the raw catalog and write to `cam_prod`
+(least privilege). A custom `generate_schema_name` macro gives production
+clean schema names (`marts`) while dev and CI keep a prefix so builds never
+collide.
+
+**Adapted from the brief:** the brief's example catalog names
+(`bronze_production`, `ci_development`) were replaced with `cam_raw_bronze`,
+`cam_ci` and `cam_prod`, so that only the raw catalog carries a layer name.
+
+## 27 Oct 2026 — Missing Snapchat ad groups: warn, not fail
+
+**Decision:** The relationships test from stg_snapchat_ads to
+stg_snapchat_ad_groups has severity warn.
+
+**Why:** 304 ads point to 85 ad groups that are not in the source file. None of
+those ads have stats, so no reported number is affected. Failing the build
+would block every downstream model over a gap that changes nothing; deleting
+the test would hide it. A warning keeps it visible in every run and in
+Elementary.

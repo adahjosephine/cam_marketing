@@ -69,7 +69,11 @@ SELECT * FROM read_files(
 --   snapchat_ads_adgroup_history_new_ad_group_names.csv  -> cam_raw_bronze.snapchat.ad_groups
 --   snapchat_ads_campaign_history_new_campaign_names.csv -> cam_raw_bronze.snapchat.campaigns
 
-
+-- Fix: the first upload loaded all four Snapchat files into snapchat.ads.
+  -- Corrected by keeping only the ads file's rows and columns:
+  -- CREATE OR REPLACE TABLE cam_raw_bronze.snapchat.ads AS
+  -- SELECT ad_id, ad_group_id, ad_name, ad_detail_updated_at
+  -- FROM cam_raw_bronze.snapchat.ads WHERE ad_id IS NOT NULL;
 -- =========================================================================
 -- Check: both should list their tables
 -- =========================================================================

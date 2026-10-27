@@ -1,0 +1,4 @@
+currency_code,rate_year,units_per_eur,rate_source
+EUR,2024,1.000000,Base currency
+EUR,2025,1.000000,Base currency
+USD,2025,1.130000,ECB euro reference rate - 2025 annual average
